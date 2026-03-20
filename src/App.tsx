@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { GoogleGenAI, Type } from "@google/genai";
 import { 
   Settings, 
@@ -14,13 +14,12 @@ import {
   MapPin, 
   Zap, 
   Shield, 
-  Printer, 
-  AlertTriangle,
-  CheckCircle2,
   Loader2,
   X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { MapView } from './components/MapView';
+import { ResultsPanel } from './components/ResultsPanel';
 
 // Types for AI Response
 interface RiskAssessment {
@@ -39,6 +38,7 @@ interface AIResponse {
 export default function App() {
   // State
   const [apiKey, setApiKey] = useState<string>(process.env.GEMINI_API_KEY || '');
+  const [mapsApiKey] = useState<string>(process.env.GOOGLE_MAPS_PLATFORM_KEY || '');
   const [showSettings, setShowSettings] = useState(false);
   const [activeTab, setActiveTab] = useState<'text' | 'voice' | 'image'>('text');
   
@@ -49,7 +49,7 @@ export default function App() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [includeGps, setIncludeGps] = useState(true);
-  const [gpsCoords, setGpsCoords] = useState<string | null>(null);
+  const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [gpsStatus, setGpsStatus] = useState('');
 
   // Results
@@ -60,15 +60,19 @@ export default function App() {
   // Refs
   const recognitionRef = useRef<any>(null);
 
+  // Memoized GPS string
+  const gpsString = useMemo(() => 
+    gpsCoords ? `${gpsCoords.lat.toFixed(5)}, ${gpsCoords.lng.toFixed(5)}` : null
+  , [gpsCoords]);
+
   // Initialize GPS
   useEffect(() => {
     if (includeGps && navigator.geolocation) {
       setGpsStatus('Acquiring GPS...');
       navigator.geolocation.getCurrentPosition(
         (pos) => {
-          const coords = `${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}`;
-          setGpsCoords(coords);
-          setGpsStatus(`GPS Locked: ${coords}`);
+          setGpsCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+          setGpsStatus(`GPS Locked: ${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}`);
         },
         () => {
           setGpsStatus('GPS Failed');
@@ -117,7 +121,7 @@ export default function App() {
     }
   }, [result]);
 
-  const toggleRecording = () => {
+  const toggleRecording = useCallback(() => {
     if (!recognitionRef.current) {
       alert('Speech recognition not supported in this browser.');
       return;
@@ -130,9 +134,9 @@ export default function App() {
       recognitionRef.current.start();
       setIsRecording(true);
     }
-  };
+  }, [isRecording]);
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       setImageFile(file);
@@ -140,9 +144,9 @@ export default function App() {
       reader.onload = (ev) => setImagePreview(ev.target?.result as string);
       reader.readAsDataURL(file);
     }
-  };
+  }, []);
 
-  const analyzeThreat = async () => {
+  const analyzeThreat = useCallback(async () => {
     if (!apiKey) {
       setShowSettings(true);
       return;
@@ -187,8 +191,8 @@ export default function App() {
         parts.push({ text: "Emergency photo provided for analysis." });
       }
 
-      if (gpsCoords) {
-        parts.push({ text: `INCIDENT LOCATION COORDS: ${gpsCoords}` });
+      if (gpsString) {
+        parts.push({ text: `INCIDENT LOCATION COORDS: ${gpsString}` });
       }
 
       const response = await genAI.models.generateContent({
@@ -225,30 +229,10 @@ export default function App() {
     } finally {
       setIsAnalyzing(false);
     }
-  };
-
-  const getRiskColor = (level: string) => {
-    switch (level) {
-      case 'low': return 'risk-low';
-      case 'medium': return 'risk-medium';
-      case 'high':
-      case 'critical': return 'risk-high';
-      default: return 'risk-low';
-    }
-  };
-
-  const getGlowClass = (level: string) => {
-    switch (level) {
-      case 'low': return 'glow-low';
-      case 'medium': return 'glow-medium';
-      case 'high':
-      case 'critical': return 'glow-high';
-      default: return '';
-    }
-  };
+  }, [apiKey, activeTab, textInput, voiceTranscript, imagePreview, imageFile, gpsString]);
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-10">
+    <main className="max-w-6xl mx-auto px-4 py-10" role="main">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         
         {/* Left Panel: Inputs */}
@@ -264,31 +248,38 @@ export default function App() {
             <button 
               onClick={() => setShowSettings(true)}
               className="icon-btn"
+              aria-label="Open Settings"
             >
               <Settings size={20} />
             </button>
           </header>
 
-          <div className="flex gap-3 mb-6">
+          <nav className="flex gap-3 mb-6" aria-label="Input Method Tabs">
             <button 
               onClick={() => setActiveTab('text')}
               className={`tab-btn flex items-center justify-center gap-2 ${activeTab === 'text' ? 'active' : ''}`}
+              aria-selected={activeTab === 'text'}
+              role="tab"
             >
               <FileText size={18} /> Text
             </button>
             <button 
               onClick={() => setActiveTab('voice')}
               className={`tab-btn flex items-center justify-center gap-2 ${activeTab === 'voice' ? 'active' : ''}`}
+              aria-selected={activeTab === 'voice'}
+              role="tab"
             >
               <Mic size={18} /> Voice
             </button>
             <button 
               onClick={() => setActiveTab('image')}
               className={`tab-btn flex items-center justify-center gap-2 ${activeTab === 'image' ? 'active' : ''}`}
+              aria-selected={activeTab === 'image'}
+              role="tab"
             >
               <ImageIcon size={18} /> Image
             </button>
-          </div>
+          </nav>
 
           <AnimatePresence mode="wait">
             {activeTab === 'text' && (
@@ -302,6 +293,7 @@ export default function App() {
                   value={textInput}
                   onChange={(e) => setTextInput(e.target.value)}
                   placeholder="Describe the situation in detail. For example: 'A tree has fallen on power lines on Main St, sparks are flying.'"
+                  aria-label="Situation Description"
                 />
               </motion.div>
             )}
@@ -317,6 +309,7 @@ export default function App() {
                 <button 
                   onClick={toggleRecording}
                   className={`icon-btn w-20 h-20 text-2xl mx-auto mb-5 ${isRecording ? 'text-red-500 shadow-[0_0_20px_rgba(239,68,68,0.5)]' : ''}`}
+                  aria-label={isRecording ? "Stop Recording" : "Start Recording"}
                 >
                   <Mic size={32} />
                 </button>
@@ -338,10 +331,10 @@ export default function App() {
                   <span className="text-slate-400 font-semibold">
                     {imageFile ? imageFile.name : 'Upload Emergency Photo'}
                   </span>
-                  <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
+                  <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} aria-label="Upload Photo" />
                 </label>
                 {imagePreview && (
-                  <img src={imagePreview} className="w-full max-h-60 object-cover rounded-xl mt-4 border border-white/10" alt="Preview" />
+                  <img src={imagePreview} className="w-full max-h-60 object-cover rounded-xl mt-4 border border-white/10" alt="Emergency Preview" />
                 )}
               </motion.div>
             )}
@@ -358,7 +351,7 @@ export default function App() {
             <label htmlFor="gpsToggle" className="text-slate-400 text-sm cursor-pointer flex items-center gap-1">
               <MapPin size={14} /> Include GPS Coordinates
             </label>
-            <span className={`text-xs ml-auto ${gpsStatus.includes('Failed') ? 'text-red-500' : 'text-emerald-500'}`}>
+            <span className={`text-xs ml-auto ${gpsStatus.includes('Failed') ? 'text-red-500' : 'text-emerald-500'}`} aria-live="polite">
               {gpsStatus}
             </span>
           </div>
@@ -367,10 +360,14 @@ export default function App() {
             onClick={analyzeThreat}
             disabled={isAnalyzing}
             className="primary-btn flex items-center justify-center gap-2"
+            aria-busy={isAnalyzing}
           >
             {isAnalyzing ? <Loader2 className="animate-spin" /> : <Zap size={20} />}
             Analyze Threat Level
           </button>
+
+          {/* Map View Integration */}
+          <MapView coords={gpsCoords} apiKey={mapsApiKey} />
         </motion.div>
 
         {/* Right Panel: Results */}
@@ -399,71 +396,7 @@ export default function App() {
           )}
 
           {result && !isAnalyzing && (
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="space-y-6"
-            >
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-bold">Intelligence Report</h2>
-                <button 
-                  onClick={() => window.print()}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-500/10 border border-white/10 rounded-lg hover:bg-blue-500/20 transition-all text-sm"
-                >
-                  <Printer size={16} /> Export
-                </button>
-              </div>
-
-              <div className="grid gap-4">
-                <div className={`result-card ${getGlowClass(result.risk_assessment.level)}`}>
-                  <h3 className="flex items-center gap-2 text-xs text-slate-400 uppercase tracking-widest mb-3">
-                    <AlertTriangle size={14} /> Risk Assessment
-                  </h3>
-                  <div className={`risk-badge ${getRiskColor(result.risk_assessment.level)} mb-3`}>
-                    {result.risk_assessment.level.toUpperCase()}
-                  </div>
-                  <p className="text-slate-100 leading-relaxed text-lg font-medium min-h-[3em]">
-                    {typewrittenReason}
-                    <span className="inline-block w-1 h-5 bg-blue-500 ml-1 animate-pulse" />
-                  </p>
-                </div>
-
-                <div className="result-card">
-                  <h3 className="flex items-center gap-2 text-xs text-slate-400 uppercase tracking-widest mb-3">
-                    <Zap size={14} /> Primary Intent
-                  </h3>
-                  <p className="text-white font-semibold text-lg leading-snug">
-                    {result.intent}
-                  </p>
-                </div>
-
-                <div className="result-card">
-                  <h3 className="flex items-center gap-2 text-xs text-slate-400 uppercase tracking-widest mb-3">
-                    <CheckCircle2 size={14} /> Recommended Action Protocol
-                  </h3>
-                  <ul className="action-list">
-                    {result.recommended_actions.map((action, i) => (
-                      <li key={i}>{action}</li>
-                    ))}
-                  </ul>
-                </div>
-
-                <div className="result-card">
-                  <h3 className="flex items-center gap-2 text-xs text-slate-400 uppercase tracking-widest mb-3">
-                    <FileText size={14} /> Context & Resources
-                  </h3>
-                  <div className="text-slate-400 text-sm space-y-2">
-                    {result.helpful_resources.map((res, i) => (
-                      <p key={i}>• {res}</p>
-                    ))}
-                  </div>
-                  <div className="mt-6 pt-4 border-t border-white/10 flex justify-between items-center text-xs text-slate-500">
-                    <span>AI Confidence: <strong className="text-blue-500">{result.confidence_score}%</strong></span>
-                    <span>{gpsCoords ? `📍 ${gpsCoords}` : 'No GPS Data'}</span>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
+            <ResultsPanel result={result} typewrittenReason={typewrittenReason} gpsCoords={gpsString} />
           )}
         </motion.div>
       </div>
@@ -476,6 +409,9 @@ export default function App() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="settings-title"
           >
             <motion.div 
               initial={{ scale: 0.9, opacity: 0 }}
@@ -484,8 +420,8 @@ export default function App() {
               className="bg-slate-900 border border-white/10 p-8 rounded-3xl w-full max-w-md shadow-2xl"
             >
               <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold">System Authentication</h2>
-                <button onClick={() => setShowSettings(false)} className="text-slate-400 hover:text-white">
+                <h2 id="settings-title" className="text-2xl font-bold">System Authentication</h2>
+                <button onClick={() => setShowSettings(false)} className="text-slate-400 hover:text-white" aria-label="Close Settings">
                   <X size={24} />
                 </button>
               </div>
@@ -498,6 +434,7 @@ export default function App() {
                 onChange={(e) => setApiKey(e.target.value)}
                 placeholder="AIzaSy..."
                 className="w-full p-4 bg-black/40 border border-white/10 rounded-xl text-white font-mono text-lg mb-8 outline-none focus:border-blue-500 transition-all"
+                aria-label="Gemini API Key"
               />
               <div className="flex gap-3 justify-end">
                 <button 
@@ -520,6 +457,6 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+    </main>
   );
 }
