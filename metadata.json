@@ -1,0 +1,5 @@
+{
+  "name": "IntentBridge AI",
+  "description": "Emergency Multimodal AI for situational analysis, risk assessment, and protocol generation.",
+  "requestFramePermissions": ["microphone", "geolocation"]
+}

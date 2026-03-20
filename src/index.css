@@ -1,0 +1,76 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap');
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --color-bg-start: #020617;
+  --color-bg-mid: #0f172a;
+  --color-bg-end: #1e1b4b;
+  --color-accent: #3b82f6;
+  --color-danger: #ef4444;
+  --color-warning: #f59e0b;
+  --color-success: #10b981;
+}
+
+@layer base {
+  body {
+    @apply bg-bg-start text-slate-50 min-h-screen font-sans;
+    background: linear-gradient(135deg, var(--color-bg-start), var(--color-bg-mid), var(--color-bg-end));
+    background-size: 400% 400%;
+    animation: bgAnimation 20s ease infinite;
+  }
+}
+
+@keyframes bgAnimation {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.glass-panel {
+  @apply bg-white/5 backdrop-blur-2xl border border-white/10 rounded-3xl p-8 shadow-2xl;
+  box-shadow: 0 30px 60px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.1);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-panel:hover {
+  @apply -translate-y-1;
+  box-shadow: 0 40px 80px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.15);
+}
+
+.radar {
+  @apply w-20 h-20 rounded-full bg-blue-500/10 border-2 border-blue-500 relative overflow-hidden shadow-[0_0_20px_rgba(59,130,246,0.5)];
+}
+
+.radar::before {
+  content: '';
+  @apply absolute top-1/2 left-1/2 w-1/2 h-1/2 origin-top-left;
+  background: linear-gradient(45deg, rgba(59, 130, 246, 0) 0%, rgba(59, 130, 246, 0.8) 100%);
+  animation: radar-spin 2s linear infinite;
+}
+
+@keyframes radar-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.risk-badge {
+  @apply px-3.5 py-1.5 rounded-full font-extrabold text-[0.85rem] tracking-wider;
+}
+
+.risk-low { @apply bg-emerald-500/20 text-emerald-500 border border-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]; }
+.risk-medium { @apply bg-amber-500/20 text-amber-500 border border-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.5)]; }
+.risk-high, .risk-critical { @apply bg-rose-500/20 text-rose-500 border border-rose-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]; }
+
+.glow-low { @apply border-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.5)]; }
+.glow-medium { @apply border-amber-500 shadow-[0_0_20px_rgba(245,158,11,0.5)]; }
+.glow-high, .glow-critical { @apply border-rose-500 shadow-[0_0_20px_rgba(239,68,68,0.6)]; }
+
+.action-list li {
+  @apply mb-3 pl-5 relative leading-relaxed text-slate-300;
+}
+
+.action-list li::before {
+  content: '->';
+  @apply absolute left-0 text-blue-500 font-bold;
+}
